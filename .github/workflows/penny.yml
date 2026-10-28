@@ -18,6 +18,10 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
+      - name: Install Graphviz for Threat Model Diagrams
+        run: |
+          sudo apt-get update && sudo apt-get install -y graphviz
+
       - name: Run SawOne Agentic Scanner
         uses: hackin2minutes-oss/sawone-agentic-action@v1
         # zizmor: ignore[unpinned-uses]
@@ -25,6 +29,29 @@ jobs:
           severity: HIGH,CRITICAL
           enforce: false
           languages: en,ar
+
+      - name: Purge Corrupted or Empty SARIF Reports
+        if: always()
+        run: |
+          echo "🧹 Checking for malformed or empty SARIF reports..."
+          if [ -d "sawone-agentic-reports/sarif" ]; then
+            find sawone-agentic-reports/sarif -name "*.sarif" -type f | while read file; do
+              if [ ! -s "$file" ] || ! jq empty "$file" 2>/dev/null; then
+                echo "⚠️ Removing invalid or truncated SARIF file: $file"
+                rm -f "$file"
+              else
+                echo "✅ Valid SARIF: $file"
+              fi
+            done
+          else
+            echo "ℹ️ No SARIF report directory found to validate."
+          fi
+
+      - name: Upload Scan Reports to GitHub Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: sawone-agentic-reports/sarif
 
       - name: Upload Security Reports
         if: always()
